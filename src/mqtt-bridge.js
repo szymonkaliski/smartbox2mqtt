@@ -168,8 +168,20 @@ export class MQTTBridge {
         );
       }
 
+      // Feature 2: Active status and power monitoring
+      const activeStatus = status.active ? "ON" : "OFF";
+      this.client.publish(`${this.baseTopic}/active`, activeStatus, {
+        retain: true,
+      });
+
+      if (status.power) {
+        this.client.publish(`${this.baseTopic}/power`, status.power, {
+          retain: true,
+        });
+      }
+
       console.log(
-        `[${this.node.name}] Published state: mode=${status.mode}, stemp=${status.stemp}, mtemp=${status.mtemp}, comf=${status.comf_temp}, eco=${status.eco_temp}`,
+        `[${this.node.name}] Published state: mode=${status.mode}, stemp=${status.stemp}, mtemp=${status.mtemp}, active=${activeStatus}, power=${status.power}W`,
       );
     } catch (error) {
       console.error(
