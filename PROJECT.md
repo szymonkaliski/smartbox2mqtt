@@ -34,8 +34,8 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 
 ## Feature 2: Active Status & Power Monitoring
 
-- [ ] Add active heating status
-- [ ] Add real-time power consumption monitoring
+- [x] Add active heating status
+- [x] Add real-time power consumption monitoring
 
 ### Additional MQTT Topics
 
@@ -43,3 +43,13 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 
 - `{baseTopic}/{nodeName}/active` - Heater actively heating (`ON`/`OFF`)
 - `{baseTopic}/{nodeName}/power` - Real-time power consumption (Watts)
+
+## Feature 3: Connection Status Monitoring
+
+- [x] Add per-node connection status (online/offline detection)
+
+### Additional MQTT Topics
+
+**Status (read-only):**
+
+- `{baseTopic}/{nodeName}/online` - Node connection status (`ON`/`OFF`)

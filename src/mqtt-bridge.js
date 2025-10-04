@@ -180,8 +180,14 @@ export class MQTTBridge {
         });
       }
 
+      // Feature 3: Connection status monitoring
+      const onlineStatus = status.sync_status === "ok" ? "ON" : "OFF";
+      this.client.publish(`${this.baseTopic}/online`, onlineStatus, {
+        retain: true,
+      });
+
       console.log(
-        `[${this.node.name}] Published state: mode=${status.mode}, stemp=${status.stemp}, mtemp=${status.mtemp}, active=${activeStatus}, power=${status.power}W`,
+        `[${this.node.name}] Published state: mode=${status.mode}, stemp=${status.stemp}, mtemp=${status.mtemp}, active=${activeStatus}, power=${status.power}W, online=${onlineStatus}`,
       );
     } catch (error) {
       console.error(
