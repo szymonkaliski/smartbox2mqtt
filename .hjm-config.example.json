@@ -1,0 +1,15 @@
+{
+  "smartbox": {
+    "username": "your_smartbox_username",
+    "password": "your_smartbox_password",
+    "apiName": "api"
+  },
+  "mqtt": {
+    "host": "localhost",
+    "port": 1883,
+    "username": "mqtt_username",
+    "password": "mqtt_password",
+    "baseTopic": "heater",
+    "pollingInterval": 60000
+  }
+}
