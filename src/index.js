@@ -8,7 +8,7 @@ async function main() {
   let mqttClient = null;
 
   try {
-    console.log("Starting HJM MQTT Bridge...");
+    console.log("Starting smartbox2mqtt Bridge...");
 
     const config = loadConfig();
     console.log("Configuration loaded");
@@ -34,7 +34,7 @@ async function main() {
     const mqttOptions = {
       username: config.mqtt.username,
       password: config.mqtt.password,
-      clientId: `hjm-mqtt-${Math.random().toString(16).slice(2, 8)}`,
+      clientId: `smartbox2mqtt-${Math.random().toString(16).slice(2, 8)}`,
     };
 
     mqttClient = mqtt.connect(mqttUrl, mqttOptions);
@@ -93,7 +93,7 @@ async function main() {
     }
 
     console.log(
-      `\nHJM MQTT Bridge is running with ${bridges.length} heater(s)`,
+      `\nsmartbox2mqtt Bridge is running with ${bridges.length} heater(s)`,
     );
     console.log("Subscribed topics:");
     bridges.forEach((bridge) => {

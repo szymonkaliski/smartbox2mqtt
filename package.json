@@ -1,5 +1,5 @@
 {
-  "name": "hjm-mqtt",
+  "name": "smartbox2mqtt",
   "version": "1.0.0",
   "description": "MQTT to SmartBox heater adapter",
   "main": "src/index.js",

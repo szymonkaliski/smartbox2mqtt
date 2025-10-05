@@ -25,7 +25,7 @@ export class MQTTBridge {
       const options = {
         username: this.config.mqtt.username,
         password: this.config.mqtt.password,
-        clientId: `hjm-mqtt-${Math.random().toString(16).slice(2, 8)}`,
+        clientId: `smartbox2mqtt-${Math.random().toString(16).slice(2, 8)}`,
       };
 
       this.client = mqtt.connect(mqttUrl, options);

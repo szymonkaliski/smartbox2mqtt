@@ -1,11 +1,11 @@
-# `hjm-mqtt`
+# `smartbox2mqtt`
 
 Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->smart-heater adapter implemented in Node.
 
 ## Goals
 
 - provide simple MQTT interface for controlling the mode of the heater (manual/automatic/off), and setting up the temperature
-- the MQTT configuration (host, username, password) and other necessary configuration should reside in `~/.hjm-config.json`
+- the MQTT configuration (host, username, password) and other necessary configuration should reside in `~/.smartbox2mqtt-config.json`
 
 ## Feature 1: Basic MQTT Bridge
 
