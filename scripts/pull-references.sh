@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Pull reference repositories for SmartBox heater integration
+# Pull reference repositories for smartbox heater integration
 # These are used as reference for the API implementation
 
 set -e
@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 REFERENCE_DIR="$PROJECT_ROOT/reference"
 
-echo "Pulling SmartBox reference repositories..."
+echo "Pulling smartbox reference repositories..."
 echo "Reference directory: $REFERENCE_DIR"
 echo ""
 

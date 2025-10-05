@@ -53,3 +53,9 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 **Status (read-only):**
 
 - `{baseTopic}/{nodeName}/online` - Node connection status (`ON`/`OFF`)
+
+## Feature 4: Configuration Refactor
+
+- [x] Move `pollingInterval` from MQTT config to smartbox config @done(2025-10-05)
+- [x] Update README.md with correct configuration structure @done(2025-10-05)
+- [x] Update code to read from `config.smartbox.pollingInterval` @done(2025-10-05)

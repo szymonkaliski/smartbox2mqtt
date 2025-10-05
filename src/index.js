@@ -82,7 +82,7 @@ async function main() {
           mqttClient,
         );
         await bridge.connect();
-        bridge.startPolling(config.mqtt.pollingInterval || 60000);
+        bridge.startPolling(config.smartbox.pollingInterval || 60000);
         bridges.push(bridge);
       }
     }
