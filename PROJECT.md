@@ -59,3 +59,8 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 - [x] Move `pollingInterval` from MQTT config to smartbox config @done(2025-10-05)
 - [x] Update README.md with correct configuration structure @done(2025-10-05)
 - [x] Update code to read from `config.smartbox.pollingInterval` @done(2025-10-05)
+
+## Feature 5: Global CLI Binary
+
+- [x] Add shebang to `src/index.js` @done(2025-10-05)
+- [x] Add `bin` field to `package.json` @done(2025-10-05)

@@ -4,6 +4,9 @@
   "description": "MQTT to smartbox heater adapter",
   "main": "src/index.js",
   "type": "module",
+  "bin": {
+    "smartbox2mqtt": "src/index.js"
+  },
   "scripts": {
     "start": "node src/index.js",
     "format": "prettier --write ."

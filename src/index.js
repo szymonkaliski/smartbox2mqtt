@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import mqtt from "mqtt";
 import { loadConfig } from "./config.js";
 import { SmartboxClient } from "./smartbox-client.js";
