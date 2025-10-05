@@ -1,0 +1,6 @@
+reference/
+PROJECT.md
+CLAUDE.md
+.claude/
+.gitignore
+.prettierignore

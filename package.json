@@ -16,8 +16,16 @@
     "smartbox",
     "heater"
   ],
-  "author": "",
+  "author": "Szymon Kaliski <hi@szymonkaliski.com>",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/szymonkaliski/smartbox2mqtt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/szymonkaliski/smartbox2mqtt/issues"
+  },
+  "homepage": "https://github.com/szymonkaliski/smartbox2mqtt#readme",
   "dependencies": {
     "axios": "^1.6.7",
     "mqtt": "^5.3.5"
