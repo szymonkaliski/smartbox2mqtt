@@ -45,6 +45,7 @@ async function main() {
         console.log("Connected to MQTT broker");
         resolve();
       });
+
       mqttClient.on("error", (error) => {
         console.error("MQTT error:", error);
         reject(error);
@@ -55,6 +56,7 @@ async function main() {
       console.log(
         `[MQTT] Received message on topic: ${topic}, payload: ${message.toString()}`,
       );
+
       for (const bridge of bridges) {
         await bridge.handleMessage(topic, message);
       }

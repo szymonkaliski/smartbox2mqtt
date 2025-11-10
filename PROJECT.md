@@ -64,3 +64,4 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 
 - [x] Add shebang to `src/index.js` @done(2025-10-05)
 - [x] Add `bin` field to `package.json` @done(2025-10-05)
+

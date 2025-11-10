@@ -83,19 +83,35 @@ export class MQTTBridge {
         console.log(
           `[${this.node.name}] Setting mode to: ${payload} (deviceId: ${this.deviceId}, node: ${this.node.addr})`,
         );
+
+        // Optimistic update
+        this.client.publish(`${this.baseTopic}/mode`, payload, {
+          retain: true,
+        });
         await this.smartboxClient.setMode(this.deviceId, this.node, payload);
         console.log(`[${this.node.name}] Successfully set mode to: ${payload}`);
+
+        // Optimistic update confirmation from API
         await this.publishState();
       } else if (topic === `${this.baseTopic}/temperature/set`) {
         const temperature = parseFloat(payload);
+
         if (isNaN(temperature)) {
           console.error(
             `[${this.node.name}] Invalid temperature value: ${payload}`,
           );
           return;
         }
+
         console.log(
           `[${this.node.name}] Setting temperature to: ${temperature}`,
+        );
+
+        // Optimistic update
+        this.client.publish(
+          `${this.baseTopic}/temperature`,
+          temperature.toString(),
+          { retain: true },
         );
         await this.smartboxClient.setTemperature(
           this.deviceId,
@@ -105,6 +121,8 @@ export class MQTTBridge {
         console.log(
           `[${this.node.name}] Successfully set temperature to: ${temperature}`,
         );
+
+        // Optimistic update confirmation from API
         await this.publishState();
       }
     } catch (error) {
@@ -128,11 +146,13 @@ export class MQTTBridge {
       this.client.publish(`${this.baseTopic}/mode`, status.mode || "unknown", {
         retain: true,
       });
+
       this.client.publish(
         `${this.baseTopic}/temperature`,
         status.stemp || "0",
         { retain: true },
       );
+
       this.client.publish(
         `${this.baseTopic}/current_temperature`,
         status.mtemp || "0",
@@ -146,6 +166,7 @@ export class MQTTBridge {
           { retain: true },
         );
       }
+
       if (status.eco_temp) {
         this.client.publish(
           `${this.baseTopic}/eco_temperature`,
@@ -153,6 +174,7 @@ export class MQTTBridge {
           { retain: true },
         );
       }
+
       if (status.ice_temp) {
         this.client.publish(
           `${this.baseTopic}/ice_temperature`,
@@ -160,6 +182,7 @@ export class MQTTBridge {
           { retain: true },
         );
       }
+
       if (status.selected_temp) {
         this.client.publish(
           `${this.baseTopic}/selected_temperature`,
@@ -168,7 +191,6 @@ export class MQTTBridge {
         );
       }
 
-      // Feature 2: Active status and power monitoring
       const activeStatus = status.active ? "ON" : "OFF";
       this.client.publish(`${this.baseTopic}/active`, activeStatus, {
         retain: true,
@@ -180,7 +202,6 @@ export class MQTTBridge {
         });
       }
 
-      // Feature 3: Connection status monitoring
       const onlineStatus = status.sync_status === "ok" ? "ON" : "OFF";
       this.client.publish(`${this.baseTopic}/online`, onlineStatus, {
         retain: true,
