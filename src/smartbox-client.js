@@ -176,7 +176,7 @@ export class SmartboxClient {
       `[SmartboxClient] setTemperature called: temp=${temperature}, units=${units}`,
     );
     const statusData = {
-      stemp: temperature.toString(),
+      stemp: Number(temperature).toFixed(1),
       units,
     };
     return await this.setNodeStatus(deviceId, node, statusData);

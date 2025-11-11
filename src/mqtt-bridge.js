@@ -90,9 +90,6 @@ export class MQTTBridge {
         });
         await this.smartboxClient.setMode(this.deviceId, this.node, payload);
         console.log(`[${this.node.name}] Successfully set mode to: ${payload}`);
-
-        // Optimistic update confirmation from API
-        await this.publishState();
       } else if (topic === `${this.baseTopic}/temperature/set`) {
         const temperature = parseFloat(payload);
 
@@ -110,7 +107,7 @@ export class MQTTBridge {
         // Optimistic update
         this.client.publish(
           `${this.baseTopic}/temperature`,
-          temperature.toString(),
+          temperature.toFixed(1),
           { retain: true },
         );
         await this.smartboxClient.setTemperature(
@@ -121,9 +118,6 @@ export class MQTTBridge {
         console.log(
           `[${this.node.name}] Successfully set temperature to: ${temperature}`,
         );
-
-        // Optimistic update confirmation from API
-        await this.publishState();
       }
     } catch (error) {
       console.error(

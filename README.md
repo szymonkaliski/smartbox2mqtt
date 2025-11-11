@@ -81,7 +81,7 @@ mosquitto_pub -t "smartbox/living-room/mode/set" -m "manual"
 ### Set target temperature to 21°C
 
 ```bash
-mosquitto_pub -t "smartbox/living-room/temperature/set" -m "21"
+mosquitto_pub -t "smartbox/living-room/temperature/set" -m "21.0"
 ```
 
 ### Monitor current temperature
