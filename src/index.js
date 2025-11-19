@@ -3,16 +3,21 @@ import mqtt from "mqtt";
 import { loadConfig } from "./config.js";
 import { SmartboxClient } from "./smartbox-client.js";
 import { MQTTBridge } from "./mqtt-bridge.js";
+import { SocketBridge } from "./socket-bridge.js";
+import logger from "./logger.js";
+
+const log = logger;
 
 async function main() {
   const bridges = [];
+  const socketBridges = [];
   let mqttClient = null;
 
   try {
-    console.log("Starting smartbox2mqtt Bridge...");
+    log.info("Starting smartbox2mqtt Bridge");
 
     const config = loadConfig();
-    console.log("Configuration loaded");
+    log.info("Configuration loaded");
 
     const smartboxClient = new SmartboxClient(
       config.smartbox.username,
@@ -21,13 +26,12 @@ async function main() {
     );
 
     await smartboxClient.authenticate();
-    console.log("Authenticated with Smartbox API");
 
     const devices = await smartboxClient.getDevices();
-    console.log(`Found ${devices.devs.length} device(s)`);
+    log.info({ count: devices.devs.length }, "Found devices");
 
     if (devices.devs.length === 0) {
-      console.error("No devices found");
+      log.error("No devices found");
       process.exit(1);
     }
 
@@ -42,41 +46,35 @@ async function main() {
 
     await new Promise((resolve, reject) => {
       mqttClient.on("connect", () => {
-        console.log("Connected to MQTT broker");
+        log.info("Connected to MQTT broker");
         resolve();
       });
 
       mqttClient.on("error", (error) => {
-        console.error("MQTT error:", error);
+        log.error({ err: error }, "MQTT error");
         reject(error);
       });
     });
 
     mqttClient.on("message", async (topic, message) => {
-      console.log(
-        `[MQTT] Received message on topic: ${topic}, payload: ${message.toString()}`,
-      );
-
       for (const bridge of bridges) {
         await bridge.handleMessage(topic, message);
       }
     });
 
     for (const device of devices.devs) {
-      console.log(`Processing device: ${device.name} (${device.dev_id})`);
+      log.info({ device: device.name, deviceId: device.dev_id }, "Processing device");
 
       const nodes = await smartboxClient.getNodes(device.dev_id);
-      console.log(`  Found ${nodes.length} node(s)`);
 
       const heaterNodes = nodes.filter((node) =>
         ["htr", "acm", "htr_mod"].includes(node.type),
       );
-      console.log(`  Found ${heaterNodes.length} heater node(s)`);
+      log.info({ total: nodes.length, heaters: heaterNodes.length }, "Found nodes");
+
+      const bridgeMap = {};
 
       for (const heaterNode of heaterNodes) {
-        console.log(
-          `  Setting up bridge for: ${heaterNode.name} (type: ${heaterNode.type})`,
-        );
         const bridge = new MQTTBridge(
           config,
           smartboxClient,
@@ -87,33 +85,55 @@ async function main() {
         await bridge.connect();
         bridge.startPolling(config.smartbox.pollingInterval || 60000);
         bridges.push(bridge);
+        bridgeMap[`${heaterNode.type}_${heaterNode.addr}`] = bridge;
       }
+
+      const socketBridge = new SocketBridge(
+        smartboxClient,
+        device.dev_id,
+        (data) => {
+          if (data.nodes) {
+            for (const nodeData of data.nodes) {
+              const key = `${nodeData.type}_${nodeData.addr}`;
+              const bridge = bridgeMap[key];
+              if (bridge && nodeData.status) {
+                bridge.publishStatus(nodeData.status);
+              }
+            }
+          } else if (data.path && data.body) {
+            const match = data.path.match(/^\/(\w+)\/(\d+)\/status$/);
+            if (match) {
+              const key = `${match[1]}_${match[2]}`;
+              const bridge = bridgeMap[key];
+              if (bridge) {
+                bridge.publishStatus(data.body);
+              }
+            }
+          }
+        },
+      );
+      await socketBridge.connect();
+      socketBridges.push(socketBridge);
     }
 
     if (bridges.length === 0) {
-      console.error("No heater nodes found across all devices");
+      log.error("No heater nodes found across all devices");
       process.exit(1);
     }
 
-    console.log(
-      `\nsmartbox2mqtt Bridge is running with ${bridges.length} heater(s)`,
-    );
-    console.log("Subscribed topics:");
-    bridges.forEach((bridge) => {
-      console.log(`  - ${bridge.baseTopic}/mode/set`);
-      console.log(`  - ${bridge.baseTopic}/temperature/set`);
-    });
+    log.info({ heaters: bridges.length }, "smartbox2mqtt Bridge is running");
 
     process.on("SIGINT", () => {
-      console.log("\nShutting down...");
+      log.info("Shutting down");
       bridges.forEach((bridge) => bridge.unsubscribe());
+      socketBridges.forEach((sb) => sb.disconnect());
       if (mqttClient) {
         mqttClient.end();
       }
       process.exit(0);
     });
   } catch (error) {
-    console.error("Fatal error:", error.message);
+    log.fatal({ err: error }, "Fatal error");
     if (mqttClient) {
       mqttClient.end();
     }

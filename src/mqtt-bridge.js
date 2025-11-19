@@ -1,4 +1,5 @@
 import mqtt from "mqtt";
+import { createLogger } from "./logger.js";
 
 export class MQTTBridge {
   constructor(config, smartboxClient, deviceId, node, mqttClient = null) {
@@ -10,6 +11,7 @@ export class MQTTBridge {
     this.ownClient = !mqttClient;
     const nodeName = this.sanitizeNodeName(node.name);
     this.baseTopic = `${config.mqtt.baseTopic || "heater"}/${nodeName}`;
+    this.log = createLogger(node.name);
   }
 
   sanitizeNodeName(name) {
@@ -31,7 +33,7 @@ export class MQTTBridge {
       this.client = mqtt.connect(mqttUrl, options);
 
       this.client.on("connect", () => {
-        console.log("Connected to MQTT broker");
+        this.log.info("Connected to MQTT broker");
         this.subscribe();
         this.publishState();
       });
@@ -41,12 +43,10 @@ export class MQTTBridge {
       });
 
       this.client.on("error", (error) => {
-        console.error("MQTT error:", error);
+        this.log.error({ err: error }, "MQTT error");
       });
     } else {
-      console.log(
-        `Setting up bridge for ${this.node.name} (${this.baseTopic})`,
-      );
+      this.log.info({ baseTopic: this.baseTopic }, "Setting up bridge");
       this.subscribe();
       await this.publishState();
     }
@@ -55,56 +55,45 @@ export class MQTTBridge {
   subscribe() {
     this.client.subscribe(`${this.baseTopic}/mode/set`, (err) => {
       if (err) {
-        console.error("Failed to subscribe to mode topic:", err);
+        this.log.error({ err }, "Failed to subscribe to mode topic");
       } else {
-        console.log(`Subscribed to ${this.baseTopic}/mode/set`);
+        this.log.debug({ topic: `${this.baseTopic}/mode/set` }, "Subscribed");
       }
     });
 
     this.client.subscribe(`${this.baseTopic}/temperature/set`, (err) => {
       if (err) {
-        console.error("Failed to subscribe to temperature topic:", err);
+        this.log.error({ err }, "Failed to subscribe to temperature topic");
       } else {
-        console.log(`Subscribed to ${this.baseTopic}/temperature/set`);
+        this.log.debug({ topic: `${this.baseTopic}/temperature/set` }, "Subscribed");
       }
     });
   }
 
   async handleMessage(topic, message) {
     const payload = message.toString();
-    console.log(`[${this.node.name}] Received message on ${topic}: ${payload}`);
 
     if (!topic.startsWith(this.baseTopic)) {
       return;
     }
 
+    this.log.debug({ topic, payload }, "Received message");
+
     try {
       if (topic === `${this.baseTopic}/mode/set`) {
-        console.log(
-          `[${this.node.name}] Setting mode to: ${payload} (deviceId: ${this.deviceId}, node: ${this.node.addr})`,
-        );
-
-        // Optimistic update
         this.client.publish(`${this.baseTopic}/mode`, payload, {
           retain: true,
         });
         await this.smartboxClient.setMode(this.deviceId, this.node, payload);
-        console.log(`[${this.node.name}] Successfully set mode to: ${payload}`);
+        this.log.info({ mode: payload }, "Mode set successfully");
       } else if (topic === `${this.baseTopic}/temperature/set`) {
         const temperature = parseFloat(payload);
 
         if (isNaN(temperature)) {
-          console.error(
-            `[${this.node.name}] Invalid temperature value: ${payload}`,
-          );
+          this.log.error({ payload }, "Invalid temperature value");
           return;
         }
 
-        console.log(
-          `[${this.node.name}] Setting temperature to: ${temperature}`,
-        );
-
-        // Optimistic update
         this.client.publish(
           `${this.baseTopic}/temperature`,
           temperature.toFixed(1),
@@ -115,102 +104,102 @@ export class MQTTBridge {
           this.node,
           temperature,
         );
-        console.log(
-          `[${this.node.name}] Successfully set temperature to: ${temperature}`,
-        );
+        this.log.info({ temperature }, "Temperature set successfully");
       }
     } catch (error) {
-      console.error(
-        `[${this.node.name}] Error handling MQTT message:`,
-        error.message,
-      );
-      console.error(`[${this.node.name}] Stack trace:`, error.stack);
+      this.log.error({ err: error }, "Error handling MQTT message");
     }
   }
 
   async publishState() {
     try {
-      console.log(`[${this.node.name}] Fetching node status...`);
+      this.log.debug("Fetching node status");
       const status = await this.smartboxClient.getNodeStatus(
         this.deviceId,
         this.node,
       );
-      console.log(`[${this.node.name}] Status:`, JSON.stringify(status));
-
-      this.client.publish(`${this.baseTopic}/mode`, status.mode || "unknown", {
-        retain: true,
-      });
-
-      this.client.publish(
-        `${this.baseTopic}/temperature`,
-        status.stemp || "0",
-        { retain: true },
-      );
-
-      this.client.publish(
-        `${this.baseTopic}/current_temperature`,
-        status.mtemp || "0",
-        { retain: true },
-      );
-
-      if (status.comf_temp) {
-        this.client.publish(
-          `${this.baseTopic}/comfort_temperature`,
-          status.comf_temp,
-          { retain: true },
-        );
-      }
-
-      if (status.eco_temp) {
-        this.client.publish(
-          `${this.baseTopic}/eco_temperature`,
-          status.eco_temp,
-          { retain: true },
-        );
-      }
-
-      if (status.ice_temp) {
-        this.client.publish(
-          `${this.baseTopic}/ice_temperature`,
-          status.ice_temp,
-          { retain: true },
-        );
-      }
-
-      if (status.selected_temp) {
-        this.client.publish(
-          `${this.baseTopic}/selected_temperature`,
-          status.selected_temp,
-          { retain: true },
-        );
-      }
-
-      const activeStatus = status.active ? "ON" : "OFF";
-      this.client.publish(`${this.baseTopic}/active`, activeStatus, {
-        retain: true,
-      });
-
-      if (status.power) {
-        this.client.publish(`${this.baseTopic}/power`, status.power, {
-          retain: true,
-        });
-      }
-
-      const onlineStatus = status.sync_status === "ok" ? "ON" : "OFF";
-      this.client.publish(`${this.baseTopic}/online`, onlineStatus, {
-        retain: true,
-      });
-
-      console.log(
-        `[${this.node.name}] Published state: mode=${status.mode}, stemp=${status.stemp}, mtemp=${status.mtemp}, active=${activeStatus}, power=${status.power}W, online=${onlineStatus}`,
-      );
+      this.publishStatus(status);
     } catch (error) {
-      console.error(
-        `[${this.node.name}] Error publishing state:`,
-        error.message,
-      );
-      console.error(`[${this.node.name}] Stack trace:`, error.stack);
+      this.log.error({ err: error }, "Error publishing state");
     }
+  }
+
+  publishStatus(status) {
+    this.client.publish(`${this.baseTopic}/mode`, status.mode || "unknown", {
+      retain: true,
+    });
+
+    this.client.publish(
+      `${this.baseTopic}/temperature`,
+      status.stemp || "0",
+      { retain: true },
+    );
+
+    this.client.publish(
+      `${this.baseTopic}/current_temperature`,
+      status.mtemp || "0",
+      { retain: true },
+    );
+
+    if (status.comf_temp) {
+      this.client.publish(
+        `${this.baseTopic}/comfort_temperature`,
+        status.comf_temp,
+        { retain: true },
+      );
+    }
+
+    if (status.eco_temp) {
+      this.client.publish(
+        `${this.baseTopic}/eco_temperature`,
+        status.eco_temp,
+        { retain: true },
+      );
+    }
+
+    if (status.ice_temp) {
+      this.client.publish(
+        `${this.baseTopic}/ice_temperature`,
+        status.ice_temp,
+        { retain: true },
+      );
+    }
+
+    if (status.selected_temp) {
+      this.client.publish(
+        `${this.baseTopic}/selected_temperature`,
+        status.selected_temp,
+        { retain: true },
+      );
+    }
+
+    const activeStatus = status.active ? "ON" : "OFF";
+    this.client.publish(`${this.baseTopic}/active`, activeStatus, {
+      retain: true,
+    });
+
+    if (status.power) {
+      this.client.publish(`${this.baseTopic}/power`, status.power, {
+        retain: true,
+      });
+    }
+
+    const onlineStatus = status.sync_status === "ok" ? "ON" : "OFF";
+    this.client.publish(`${this.baseTopic}/online`, onlineStatus, {
+      retain: true,
+    });
+
+    this.log.info(
+      {
+        mode: status.mode,
+        stemp: status.stemp,
+        mtemp: status.mtemp,
+        active: activeStatus,
+        power: status.power,
+        online: onlineStatus,
+      },
+      "Published state",
+    );
   }
 
   startPolling(intervalMs = 60000) {

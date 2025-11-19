@@ -1,6 +1,6 @@
 {
   "name": "smartbox2mqtt",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "MQTT to smartbox heater adapter",
   "main": "src/index.js",
   "type": "module",
@@ -28,7 +28,10 @@
   "homepage": "https://github.com/szymonkaliski/smartbox2mqtt#readme",
   "dependencies": {
     "axios": "^1.6.7",
-    "mqtt": "^5.3.5"
+    "mqtt": "^5.3.5",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2",
+    "socket.io-client": "^2.5.0"
   },
   "devDependencies": {
     "prettier": "^3.6.2"

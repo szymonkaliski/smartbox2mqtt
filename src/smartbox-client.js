@@ -1,4 +1,7 @@
 import axios from "axios";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("SmartboxClient");
 
 const SMARTBOX_GENERIC_BASIC_AUTH =
   "NTRiY2NiZmI0MWE5YTUxMTNmMDQ4OGQwOnZkaXZkaQ==";
@@ -49,9 +52,9 @@ export class SmartboxClient {
       this.accessToken = response.data.access_token;
       this.refreshToken = response.data.refresh_token;
       this.expiresAt = new Date(Date.now() + response.data.expires_in * 1000);
-      console.log("Authenticated successfully");
+      log.info("Authenticated successfully");
     } catch (error) {
-      console.error("Authentication failed:", error.message);
+      log.error({ err: error }, "Authentication failed");
       throw error;
     }
   }
@@ -86,7 +89,7 @@ export class SmartboxClient {
       this.refreshToken = response.data.refresh_token;
       this.expiresAt = new Date(Date.now() + response.data.expires_in * 1000);
     } catch (error) {
-      console.error("Token refresh failed:", error.message);
+      log.warn({ err: error }, "Token refresh failed, re-authenticating");
       await this.authenticate();
     }
   }
@@ -103,7 +106,7 @@ export class SmartboxClient {
       const response = await axios.get(url, { headers });
       return response.data;
     } catch (error) {
-      console.error(`API request failed for ${path}:`, error.message);
+      log.error({ err: error, path }, "API request failed");
       throw error;
     }
   }
@@ -117,22 +120,20 @@ export class SmartboxClient {
     };
 
     try {
-      console.log(`[SmartboxClient] POST ${url}`, data);
+      log.debug({ path, data }, "POST request");
       const response = await axios.post(url, data, { headers });
-      console.log(`[SmartboxClient] POST response:`, response.data);
+      log.debug({ path, response: response.data }, "POST response");
       return response.data;
     } catch (error) {
-      console.error(
-        `[SmartboxClient] API post failed for ${path}:`,
-        error.message,
+      log.error(
+        {
+          err: error,
+          path,
+          status: error.response?.status,
+          responseData: error.response?.data,
+        },
+        "API POST failed",
       );
-      if (error.response) {
-        console.error(
-          `[SmartboxClient] Response status:`,
-          error.response.status,
-        );
-        console.error(`[SmartboxClient] Response data:`, error.response.data);
-      }
       throw error;
     }
   }
@@ -153,27 +154,27 @@ export class SmartboxClient {
   }
 
   async setNodeStatus(deviceId, node, statusData) {
-    console.log(
-      `[SmartboxClient] Setting node status: deviceId=${deviceId}, node=${node.type}/${node.addr}, data=`,
-      statusData,
+    log.debug(
+      { deviceId, nodeType: node.type, nodeAddr: node.addr, statusData },
+      "Setting node status",
     );
     const result = await this.apiPost(
       `devs/${deviceId}/${node.type}/${node.addr}/status`,
       statusData,
     );
-    console.log(`[SmartboxClient] Set node status result:`, result);
     return result;
   }
 
   async setMode(deviceId, node, mode) {
-    console.log(`[SmartboxClient] setMode called: mode=${mode}`);
+    log.info({ mode, nodeType: node.type, nodeAddr: node.addr }, "Setting mode");
     const statusData = { mode };
     return await this.setNodeStatus(deviceId, node, statusData);
   }
 
   async setTemperature(deviceId, node, temperature, units = "C") {
-    console.log(
-      `[SmartboxClient] setTemperature called: temp=${temperature}, units=${units}`,
+    log.info(
+      { temperature, units, nodeType: node.type, nodeAddr: node.addr },
+      "Setting temperature",
     );
     const statusData = {
       stemp: Number(temperature).toFixed(1),
