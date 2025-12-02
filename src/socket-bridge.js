@@ -5,13 +5,15 @@ const API_V2_NAMESPACE = "/api/v2/socket_io";
 const log = createLogger("SocketBridge");
 
 export class SocketBridge {
-  constructor(smartboxClient, deviceId, onUpdate) {
+  constructor(smartboxClient, deviceId, onUpdate, reconnectInterval = 600000) {
     this.smartboxClient = smartboxClient;
     this.deviceId = deviceId;
     this.onUpdate = onUpdate;
     this.socket = null;
     this.connected = false;
     this.receivedDevData = false;
+    this.reconnectInterval = reconnectInterval;
+    this.reconnectTimer = null;
   }
 
   async connect() {
@@ -30,6 +32,7 @@ export class SocketBridge {
       log.info({ deviceId: this.deviceId }, "Connected");
       this.connected = true;
       this.socket.emit("dev_data");
+      this.scheduleReconnect();
     });
 
     this.socket.on("disconnect", (reason) => {
@@ -68,6 +71,8 @@ export class SocketBridge {
   }
 
   disconnect() {
+    this.clearReconnectTimer();
+
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
@@ -76,7 +81,38 @@ export class SocketBridge {
   }
 
   async reconnect() {
-    this.disconnect();
-    await this.connect();
+    try {
+      log.debug({ deviceId: this.deviceId }, "Reconnecting");
+      this.disconnect();
+      await this.connect();
+    } catch (error) {
+      log.error(
+        { err: error, deviceId: this.deviceId },
+        "Reconnect failed, will retry on next interval"
+      );
+    }
+  }
+
+  scheduleReconnect() {
+    this.clearReconnectTimer();
+
+    if (this.reconnectInterval > 0) {
+      log.debug(
+        { deviceId: this.deviceId, intervalMs: this.reconnectInterval },
+        "Scheduling reconnect"
+      );
+
+      this.reconnectTimer = setTimeout(async () => {
+        log.info({ deviceId: this.deviceId }, "Periodic reconnect triggered");
+        await this.reconnect();
+      }, this.reconnectInterval);
+    }
+  }
+
+  clearReconnectTimer() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
   }
 }

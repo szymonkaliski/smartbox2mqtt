@@ -83,7 +83,6 @@ async function main() {
           mqttClient,
         );
         await bridge.connect();
-        bridge.startPolling(config.smartbox.pollingInterval || 60000);
         bridges.push(bridge);
         bridgeMap[`${heaterNode.type}_${heaterNode.addr}`] = bridge;
       }
@@ -111,6 +110,7 @@ async function main() {
             }
           }
         },
+        config.smartbox.reconnectInterval || 600000,
       );
       await socketBridge.connect();
       socketBridges.push(socketBridge);

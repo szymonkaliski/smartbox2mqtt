@@ -24,7 +24,7 @@ Create a configuration file at `~/.smartbox2mqtt-config.json`:
     "username": "smartbox email",
     "password": "smartbox password",
     "apiName": "key of one of /src/smartbox-client.js:6, for example 'api-hjm'",
-    "pollingInterval": 60000
+    "reconnectInterval": 600000
   },
   "mqtt": {
     "host": "localhost",
@@ -35,6 +35,21 @@ Create a configuration file at `~/.smartbox2mqtt-config.json`:
   }
 }
 ```
+
+### Configuration Options
+
+#### smartbox section
+- `username` (required): Your smartbox account email
+- `password` (required): Your smartbox account password
+- `apiName` (required): API endpoint key (e.g., `api-hjm`). See `/src/smartbox-client.js:6` for available options
+- `reconnectInterval` (optional): Interval in milliseconds for periodic Socket.IO reconnection. Default: 600000 (10 minutes). This ensures the WebSocket connection stays fresh and auth tokens are refreshed. Set to `0` to disable periodic reconnects.
+
+#### mqtt section
+- `host` (required): MQTT broker hostname
+- `port` (optional): MQTT broker port. Default: 1883
+- `username` (optional): MQTT broker username
+- `password` (optional): MQTT broker password
+- `baseTopic` (optional): Base topic prefix for all MQTT messages. Default: `smartbox`
 
 ## Usage
 

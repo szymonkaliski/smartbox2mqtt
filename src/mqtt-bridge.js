@@ -202,12 +202,6 @@ export class MQTTBridge {
     );
   }
 
-  startPolling(intervalMs = 60000) {
-    setInterval(async () => {
-      await this.publishState();
-    }, intervalMs);
-  }
-
   unsubscribe() {
     if (this.client) {
       this.client.unsubscribe(`${this.baseTopic}/mode/set`);
