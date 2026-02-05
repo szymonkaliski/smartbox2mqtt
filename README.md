@@ -36,8 +36,6 @@ Create a configuration file at `~/.config/smartbox2mqtt/config.json` (Linux) or 
 }
 ```
 
-If you have an existing config at `~/.smartbox2mqtt-config.json`, it will be automatically migrated to the new location on first run.
-
 ### Configuration Options
 
 #### smartbox section
