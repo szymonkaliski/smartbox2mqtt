@@ -11,6 +11,7 @@ export function loadConfig() {
   if (!existsSync(configPath) && existsSync(oldConfigPath)) {
     mkdirSync(dirname(configPath), { recursive: true });
     renameSync(oldConfigPath, configPath);
+    console.error(`Config moved: ${oldConfigPath} -> ${configPath}`);
   }
 
   const configData = readFileSync(configPath, "utf8");
