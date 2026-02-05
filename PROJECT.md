@@ -5,7 +5,7 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 ## Goals
 
 - provide simple MQTT interface for controlling the mode of the heater (manual/automatic/off), and setting up the temperature
-- the MQTT configuration (host, username, password) and other necessary configuration should reside in `~/.smartbox2mqtt-config.json`
+- the MQTT configuration (host, username, password) and other necessary configuration should reside in the XDG config directory (`~/.config/smartbox2mqtt/config.json` on Linux)
 
 ## Feature 1: Basic MQTT Bridge
 
@@ -64,4 +64,11 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 
 - [x] Add shebang to `src/index.js` @done(2025-10-05)
 - [x] Add `bin` field to `package.json` @done(2025-10-05)
+
+## Feature 6: XDG Config Migration
+
+- [x] Install `env-paths` dependency @done(2026-02-05)
+- [x] Update `config.js` to use XDG config path via `env-paths` @done(2026-02-05)
+- [x] Auto-migrate from old `~/.smartbox2mqtt-config.json` to new XDG location @done(2026-02-05)
+- [x] Update README.md with new config path @done(2026-02-05)
 

@@ -16,7 +16,7 @@ npm install -g smartbox2mqtt
 
 ## Configuration
 
-Create a configuration file at `~/.smartbox2mqtt-config.json`:
+Create a configuration file at `~/.config/smartbox2mqtt/config.json` (Linux) or `~/Library/Preferences/smartbox2mqtt/config.json` (macOS):
 
 ```json
 {
