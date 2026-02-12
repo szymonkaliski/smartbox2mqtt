@@ -1,6 +1,6 @@
 {
   "name": "smartbox2mqtt",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "MQTT to smartbox heater adapter",
   "main": "src/index.js",
   "type": "module",
