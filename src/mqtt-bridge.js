@@ -65,7 +65,10 @@ export class MQTTBridge {
       if (err) {
         this.log.error({ err }, "Failed to subscribe to temperature topic");
       } else {
-        this.log.debug({ topic: `${this.baseTopic}/temperature/set` }, "Subscribed");
+        this.log.debug(
+          { topic: `${this.baseTopic}/temperature/set` },
+          "Subscribed",
+        );
       }
     });
   }
@@ -129,11 +132,9 @@ export class MQTTBridge {
       retain: true,
     });
 
-    this.client.publish(
-      `${this.baseTopic}/temperature`,
-      status.stemp || "0",
-      { retain: true },
-    );
+    this.client.publish(`${this.baseTopic}/temperature`, status.stemp || "0", {
+      retain: true,
+    });
 
     this.client.publish(
       `${this.baseTopic}/current_temperature`,

@@ -22,7 +22,10 @@ export class SocketBridge {
     const token = encodeURIComponent(this.smartboxClient.accessToken);
     const url = `${this.smartboxClient.apiHost}${API_V2_NAMESPACE}?token=${token}&dev_id=${this.deviceId}`;
 
-    log.info({ host: this.smartboxClient.apiHost, deviceId: this.deviceId }, "Connecting");
+    log.info(
+      { host: this.smartboxClient.apiHost, deviceId: this.deviceId },
+      "Connecting",
+    );
 
     this.socket = io(url, {
       transports: ["websocket"],
@@ -50,7 +53,10 @@ export class SocketBridge {
     });
 
     this.socket.on("update", (data) => {
-      log.debug({ path: data.path, deviceId: this.deviceId }, "Received update");
+      log.debug(
+        { path: data.path, deviceId: this.deviceId },
+        "Received update",
+      );
       if (!this.receivedDevData) {
         log.debug("Dev data not received yet, requesting");
         this.socket.emit("dev_data");
@@ -88,7 +94,7 @@ export class SocketBridge {
     } catch (error) {
       log.error(
         { err: error, deviceId: this.deviceId },
-        "Reconnect failed, will retry on next interval"
+        "Reconnect failed, will retry on next interval",
       );
     }
   }
@@ -99,7 +105,7 @@ export class SocketBridge {
     if (this.reconnectInterval > 0) {
       log.debug(
         { deviceId: this.deviceId, intervalMs: this.reconnectInterval },
-        "Scheduling reconnect"
+        "Scheduling reconnect",
       );
 
       this.reconnectTimer = setTimeout(async () => {

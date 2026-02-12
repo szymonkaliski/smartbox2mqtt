@@ -166,7 +166,10 @@ export class SmartboxClient {
   }
 
   async setMode(deviceId, node, mode) {
-    log.info({ mode, nodeType: node.type, nodeAddr: node.addr }, "Setting mode");
+    log.info(
+      { mode, nodeType: node.type, nodeAddr: node.addr },
+      "Setting mode",
+    );
     const statusData = { mode };
     return await this.setNodeStatus(deviceId, node, statusData);
   }

@@ -72,3 +72,14 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 - [x] Auto-migrate from old `~/.smartbox2mqtt-config.json` to new XDG location @done(2026-02-05)
 - [x] Update README.md with new config path @done(2026-02-05)
 
+## Feature 7: Bridge-Level LWT (Last Will and Testament)
+
+- [x] Add MQTT LWT so broker publishes `offline` on disconnect @done(2026-02-12)
+- [x] Publish `online` (retained) on successful MQTT connection @done(2026-02-12)
+- [x] Publish `offline` (retained) on graceful SIGINT shutdown @done(2026-02-12)
+
+### Additional MQTT Topics
+
+**Status (read-only):**
+
+- `{baseTopic}/lwt` - Bridge availability (`Online` / `Offline`)

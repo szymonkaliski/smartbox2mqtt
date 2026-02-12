@@ -35,11 +35,19 @@ async function main() {
       process.exit(1);
     }
 
+    const baseTopic = config.mqtt.baseTopic || "heater";
+    const statusTopic = `${baseTopic}/lwt`;
+
     const mqttUrl = `mqtt://${config.mqtt.host}:${config.mqtt.port || 1883}`;
     const mqttOptions = {
       username: config.mqtt.username,
       password: config.mqtt.password,
       clientId: `smartbox2mqtt-${Math.random().toString(16).slice(2, 8)}`,
+      will: {
+        topic: statusTopic,
+        payload: "Offline",
+        retain: true,
+      },
     };
 
     mqttClient = mqtt.connect(mqttUrl, mqttOptions);
@@ -47,6 +55,7 @@ async function main() {
     await new Promise((resolve, reject) => {
       mqttClient.on("connect", () => {
         log.info("Connected to MQTT broker");
+        mqttClient.publish(statusTopic, "Online", { retain: true });
         resolve();
       });
 
@@ -63,14 +72,20 @@ async function main() {
     });
 
     for (const device of devices.devs) {
-      log.info({ device: device.name, deviceId: device.dev_id }, "Processing device");
+      log.info(
+        { device: device.name, deviceId: device.dev_id },
+        "Processing device",
+      );
 
       const nodes = await smartboxClient.getNodes(device.dev_id);
 
       const heaterNodes = nodes.filter((node) =>
         ["htr", "acm", "htr_mod"].includes(node.type),
       );
-      log.info({ total: nodes.length, heaters: heaterNodes.length }, "Found nodes");
+      log.info(
+        { total: nodes.length, heaters: heaterNodes.length },
+        "Found nodes",
+      );
 
       const bridgeMap = {};
 
@@ -128,9 +143,13 @@ async function main() {
       bridges.forEach((bridge) => bridge.unsubscribe());
       socketBridges.forEach((sb) => sb.disconnect());
       if (mqttClient) {
-        mqttClient.end();
+        mqttClient.publish(statusTopic, "Offline", { retain: true }, () => {
+          mqttClient.end();
+          process.exit(0);
+        });
+      } else {
+        process.exit(0);
       }
-      process.exit(0);
     });
   } catch (error) {
     log.fatal({ err: error }, "Fatal error");

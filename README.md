@@ -39,12 +39,14 @@ Create a configuration file at `~/.config/smartbox2mqtt/config.json` (Linux) or 
 ### Configuration Options
 
 #### smartbox section
+
 - `username` (required): Your smartbox account email
 - `password` (required): Your smartbox account password
 - `apiName` (required): API endpoint key (e.g., `api-hjm`). See `/src/smartbox-client.js:6` for available options
 - `reconnectInterval` (optional): Interval in milliseconds for periodic Socket.IO reconnection. Default: 600000 (10 minutes). This ensures the WebSocket connection stays fresh and auth tokens are refreshed. Set to `0` to disable periodic reconnects.
 
 #### mqtt section
+
 - `host` (required): MQTT broker hostname
 - `port` (optional): MQTT broker port. Default: 1883
 - `username` (optional): MQTT broker username
@@ -84,6 +86,10 @@ For each heater (`{nodeName}`), topics are structured as: `{baseTopic}/{nodeName
 - `{baseTopic}/{nodeName}/active` - Actively heating: `ON` or `OFF`
 - `{baseTopic}/{nodeName}/power` - Real-time power consumption in Watts
 - `{baseTopic}/{nodeName}/online` - Connection status: `ON` or `OFF`
+
+### Bridge Topics
+
+- `{baseTopic}/lwt` - Bridge availability: `Online` or `Offline` (retained, with MQTT Last Will)
 
 ## Example Usage
 
