@@ -87,8 +87,13 @@ export class MQTTBridge {
         this.client.publish(`${this.baseTopic}/mode`, payload, {
           retain: true,
         });
-        await this.smartboxClient.setMode(this.deviceId, this.node, payload);
-        this.log.info({ mode: payload }, "Mode set successfully");
+        try {
+          await this.smartboxClient.setMode(this.deviceId, this.node, payload);
+          this.log.info({ mode: payload }, "Mode set successfully");
+        } catch (error) {
+          this.log.error({ err: error }, "Error setting mode, reverting state");
+          await this.publishState();
+        }
       } else if (topic === `${this.baseTopic}/temperature/set`) {
         const temperature = parseFloat(payload);
 
@@ -102,12 +107,20 @@ export class MQTTBridge {
           temperature.toFixed(1),
           { retain: true },
         );
-        await this.smartboxClient.setTemperature(
-          this.deviceId,
-          this.node,
-          temperature,
-        );
-        this.log.info({ temperature }, "Temperature set successfully");
+        try {
+          await this.smartboxClient.setTemperature(
+            this.deviceId,
+            this.node,
+            temperature,
+          );
+          this.log.info({ temperature }, "Temperature set successfully");
+        } catch (error) {
+          this.log.error(
+            { err: error },
+            "Error setting temperature, reverting state",
+          );
+          await this.publishState();
+        }
       }
     } catch (error) {
       this.log.error({ err: error }, "Error handling MQTT message");

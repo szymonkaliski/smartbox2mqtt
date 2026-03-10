@@ -54,7 +54,15 @@ export class SmartboxClient {
       this.expiresAt = new Date(Date.now() + response.data.expires_in * 1000);
       log.info("Authenticated successfully");
     } catch (error) {
-      log.error({ err: error }, "Authentication failed");
+      log.error(
+        {
+          message: error.message,
+          code: error.code,
+          status: error.response?.status,
+          responseData: error.response?.data,
+        },
+        "Authentication failed",
+      );
       throw error;
     }
   }
@@ -89,7 +97,15 @@ export class SmartboxClient {
       this.refreshToken = response.data.refresh_token;
       this.expiresAt = new Date(Date.now() + response.data.expires_in * 1000);
     } catch (error) {
-      log.warn({ err: error }, "Token refresh failed, re-authenticating");
+      log.warn(
+        {
+          message: error.message,
+          code: error.code,
+          status: error.response?.status,
+          responseData: error.response?.data,
+        },
+        "Token refresh failed, re-authenticating",
+      );
       await this.authenticate();
     }
   }
@@ -106,7 +122,16 @@ export class SmartboxClient {
       const response = await axios.get(url, { headers });
       return response.data;
     } catch (error) {
-      log.error({ err: error, path }, "API request failed");
+      log.error(
+        {
+          message: error.message,
+          code: error.code,
+          status: error.response?.status,
+          responseData: error.response?.data,
+          path,
+        },
+        "API request failed",
+      );
       throw error;
     }
   }
@@ -127,10 +152,11 @@ export class SmartboxClient {
     } catch (error) {
       log.error(
         {
-          err: error,
-          path,
+          message: error.message,
+          code: error.code,
           status: error.response?.status,
           responseData: error.response?.data,
+          path,
         },
         "API POST failed",
       );

@@ -42,6 +42,9 @@ export class SocketBridge {
       log.warn({ reason, deviceId: this.deviceId }, "Disconnected");
       this.connected = false;
       this.receivedDevData = false;
+      if (reason === "io server disconnect") {
+        this.reconnect();
+      }
     });
 
     this.socket.on("dev_data", (data) => {
@@ -96,6 +99,7 @@ export class SocketBridge {
         { err: error, deviceId: this.deviceId },
         "Reconnect failed, will retry on next interval",
       );
+      this.scheduleReconnect();
     }
   }
 
