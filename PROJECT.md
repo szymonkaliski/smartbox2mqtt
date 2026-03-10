@@ -83,3 +83,10 @@ Standalone adaptation of https://github.com/ajtudela/hass-smartbox/ into MQTT<->
 **Status (read-only):**
 
 - `{baseTopic}/lwt` - Bridge availability (`Online` / `Offline`)
+
+## Feature 8: Connection Resilience & State Consistency
+
+- [x] Reschedule reconnect timer on failure in `SocketBridge.reconnect()` @done(2026-03-10)
+- [x] Reconnect on server-initiated disconnect (`io server disconnect`) @done(2026-03-10)
+- [x] Optimistic MQTT publish with rollback on API failure in `MQTTBridge` @done(2026-03-10)
+- [x] Redact credentials from error logs in `SmartboxClient` @done(2026-03-10)
