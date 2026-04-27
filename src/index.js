@@ -11,7 +11,7 @@ const log = logger;
 async function main() {
   const bridges = [];
   const socketBridges = [];
-  let mqttClient = null;
+  let bridgeLwtClient = null;
 
   try {
     log.info("Starting smartbox2mqtt Bridge");
@@ -39,10 +39,10 @@ async function main() {
     const statusTopic = `${baseTopic}/lwt`;
 
     const mqttUrl = `mqtt://${config.mqtt.host}:${config.mqtt.port || 1883}`;
-    const mqttOptions = {
+    const bridgeLwtOptions = {
       username: config.mqtt.username,
       password: config.mqtt.password,
-      clientId: `smartbox2mqtt-${Math.random().toString(16).slice(2, 8)}`,
+      clientId: `smartbox2mqtt-lwt-${Math.random().toString(16).slice(2, 8)}`,
       will: {
         topic: statusTopic,
         payload: "Offline",
@@ -50,25 +50,19 @@ async function main() {
       },
     };
 
-    mqttClient = mqtt.connect(mqttUrl, mqttOptions);
+    bridgeLwtClient = mqtt.connect(mqttUrl, bridgeLwtOptions);
 
     await new Promise((resolve, reject) => {
-      mqttClient.on("connect", () => {
-        log.info("Connected to MQTT broker");
-        mqttClient.publish(statusTopic, "Online", { retain: true });
+      bridgeLwtClient.once("connect", () => {
+        log.info("Connected to MQTT broker (bridge LWT)");
+        bridgeLwtClient.publish(statusTopic, "Online", { retain: true });
         resolve();
       });
 
-      mqttClient.on("error", (error) => {
+      bridgeLwtClient.once("error", (error) => {
         log.error({ err: error }, "MQTT error");
         reject(error);
       });
-    });
-
-    mqttClient.on("message", async (topic, message) => {
-      for (const bridge of bridges) {
-        await bridge.handleMessage(topic, message);
-      }
     });
 
     for (const device of devices.devs) {
@@ -95,7 +89,6 @@ async function main() {
           smartboxClient,
           device.dev_id,
           heaterNode,
-          mqttClient,
         );
         await bridge.connect();
         bridges.push(bridge);
@@ -106,7 +99,22 @@ async function main() {
         smartboxClient,
         device.dev_id,
         (data) => {
+          if (
+            data.path === "/connected" &&
+            data.body &&
+            typeof data.body.connected === "boolean"
+          ) {
+            for (const bridge of Object.values(bridgeMap)) {
+              bridge.publishAvailability(data.body.connected);
+            }
+            return;
+          }
           if (data.nodes) {
+            if (typeof data.connected === "boolean") {
+              for (const bridge of Object.values(bridgeMap)) {
+                bridge.publishAvailability(data.connected);
+              }
+            }
             for (const nodeData of data.nodes) {
               const key = `${nodeData.type}_${nodeData.addr}`;
               const bridge = bridgeMap[key];
@@ -125,7 +133,14 @@ async function main() {
             }
           }
         },
-        config.smartbox.reconnectInterval || 600000,
+        {
+          onSocketLost: () => {
+            for (const bridge of Object.values(bridgeMap)) {
+              bridge.publishAvailability(false);
+            }
+          },
+          socketLossGraceMs: config.availability?.socketLossGraceMs,
+        },
       );
       await socketBridge.connect();
       socketBridges.push(socketBridge);
@@ -138,23 +153,34 @@ async function main() {
 
     log.info({ heaters: bridges.length }, "smartbox2mqtt Bridge is running");
 
-    process.on("SIGINT", () => {
+    process.on("SIGINT", async () => {
       log.info("Shutting down");
       bridges.forEach((bridge) => bridge.unsubscribe());
       socketBridges.forEach((sb) => sb.disconnect());
-      if (mqttClient) {
-        mqttClient.publish(statusTopic, "Offline", { retain: true }, () => {
-          mqttClient.end();
+      await Promise.all(bridges.map((bridge) => bridge.shutdown()));
+      if (bridgeLwtClient) {
+        const forceExit = setTimeout(() => {
+          log.warn("Shutdown publish timed out, exiting");
           process.exit(0);
-        });
+        }, 2000);
+        bridgeLwtClient.publish(
+          statusTopic,
+          "Offline",
+          { retain: true },
+          () => {
+            clearTimeout(forceExit);
+            bridgeLwtClient.end();
+            process.exit(0);
+          },
+        );
       } else {
         process.exit(0);
       }
     });
   } catch (error) {
     log.fatal({ err: error }, "Fatal error");
-    if (mqttClient) {
-      mqttClient.end();
+    if (bridgeLwtClient) {
+      bridgeLwtClient.end();
     }
     process.exit(1);
   }

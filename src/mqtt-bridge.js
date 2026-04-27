@@ -1,17 +1,24 @@
 import mqtt from "mqtt";
 import { createLogger } from "./logger.js";
 
+const DEFAULT_CONNECT_DEBOUNCE_MS = 10000;
+
 export class MQTTBridge {
-  constructor(config, smartboxClient, deviceId, node, mqttClient = null) {
+  constructor(config, smartboxClient, deviceId, node) {
     this.config = config;
     this.smartboxClient = smartboxClient;
     this.deviceId = deviceId;
     this.node = node;
-    this.client = mqttClient;
-    this.ownClient = !mqttClient;
+    this.client = null;
     const nodeName = this.sanitizeNodeName(node.name);
     this.baseTopic = `${config.mqtt.baseTopic || "heater"}/${nodeName}`;
+    this.onlineTopic = `${this.baseTopic}/online`;
     this.log = createLogger(node.name);
+    this.connectDebounceMs =
+      config.availability?.connectDebounceMs ?? DEFAULT_CONNECT_DEBOUNCE_MS;
+    this.gatewayConnected = null;
+    this.lastPublishedOnline = null;
+    this.connectDebounceTimer = null;
   }
 
   sanitizeNodeName(name) {
@@ -22,34 +29,42 @@ export class MQTTBridge {
   }
 
   async connect() {
-    if (this.ownClient) {
-      const mqttUrl = `mqtt://${this.config.mqtt.host}:${this.config.mqtt.port || 1883}`;
-      const options = {
-        username: this.config.mqtt.username,
-        password: this.config.mqtt.password,
-        clientId: `smartbox2mqtt-${Math.random().toString(16).slice(2, 8)}`,
-      };
+    const mqttUrl = `mqtt://${this.config.mqtt.host}:${this.config.mqtt.port || 1883}`;
+    const options = {
+      username: this.config.mqtt.username,
+      password: this.config.mqtt.password,
+      clientId: `smartbox2mqtt-${this.sanitizeNodeName(this.node.name)}-${Math.random().toString(16).slice(2, 8)}`,
+      will: {
+        topic: this.onlineTopic,
+        payload: "Offline",
+        retain: true,
+        qos: 1,
+      },
+    };
 
-      this.client = mqtt.connect(mqttUrl, options);
+    this.client = mqtt.connect(mqttUrl, options);
 
-      this.client.on("connect", () => {
-        this.log.info("Connected to MQTT broker");
+    await new Promise((resolve, reject) => {
+      this.client.once("connect", () => {
+        this.log.info({ baseTopic: this.baseTopic }, "Connected to MQTT broker");
         this.subscribe();
         this.publishState();
+        resolve();
       });
 
-      this.client.on("message", async (topic, message) => {
-        await this.handleMessage(topic, message);
-      });
-
-      this.client.on("error", (error) => {
+      this.client.once("error", (error) => {
         this.log.error({ err: error }, "MQTT error");
+        reject(error);
       });
-    } else {
-      this.log.info({ baseTopic: this.baseTopic }, "Setting up bridge");
-      this.subscribe();
-      await this.publishState();
-    }
+    });
+
+    this.client.on("message", async (topic, message) => {
+      await this.handleMessage(topic, message);
+    });
+
+    this.client.on("error", (error) => {
+      this.log.error({ err: error }, "MQTT error");
+    });
   }
 
   subscribe() {
@@ -198,11 +213,6 @@ export class MQTTBridge {
       });
     }
 
-    const onlineStatus = status.sync_status === "ok" ? "ON" : "OFF";
-    this.client.publish(`${this.baseTopic}/online`, onlineStatus, {
-      retain: true,
-    });
-
     this.log.info(
       {
         mode: status.mode,
@@ -210,10 +220,42 @@ export class MQTTBridge {
         mtemp: status.mtemp,
         active: activeStatus,
         power: status.power,
-        online: onlineStatus,
       },
       "Published state",
     );
+  }
+
+  recomputeOnline() {
+    const desired = this.gatewayConnected === true ? "Online" : "Offline";
+    if (desired === this.lastPublishedOnline) return;
+    this.lastPublishedOnline = desired;
+    this.client.publish(this.onlineTopic, desired, { retain: true });
+    this.log.info({ online: desired }, "Published availability");
+  }
+
+  publishAvailability(connected) {
+    if (connected === false) {
+      if (this.connectDebounceTimer) {
+        clearTimeout(this.connectDebounceTimer);
+        this.connectDebounceTimer = null;
+      }
+      this.gatewayConnected = false;
+      this.recomputeOnline();
+      return;
+    }
+    if (connected === true) {
+      if (this.gatewayConnected === true) return;
+      if (this.connectDebounceTimer) return;
+      this.log.info(
+        { delayMs: this.connectDebounceMs },
+        "Scheduling availability Online (debounce)",
+      );
+      this.connectDebounceTimer = setTimeout(() => {
+        this.connectDebounceTimer = null;
+        this.gatewayConnected = true;
+        this.recomputeOnline();
+      }, this.connectDebounceMs);
+    }
   }
 
   unsubscribe() {
@@ -223,9 +265,21 @@ export class MQTTBridge {
     }
   }
 
-  disconnect() {
-    if (this.client && this.ownClient) {
-      this.client.end();
+  async shutdown() {
+    if (this.connectDebounceTimer) {
+      clearTimeout(this.connectDebounceTimer);
+      this.connectDebounceTimer = null;
     }
+    if (!this.client) return;
+    return new Promise((resolve) => {
+      this.client.publish(
+        this.onlineTopic,
+        "Offline",
+        { retain: true, qos: 1 },
+        () => {
+          this.client.end(false, {}, resolve);
+        },
+      );
+    });
   }
 }

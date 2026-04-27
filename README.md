@@ -23,8 +23,7 @@ Create a configuration file at `~/.config/smartbox2mqtt/config.json` (Linux) or 
   "smartbox": {
     "username": "smartbox email",
     "password": "smartbox password",
-    "apiName": "key of one of /src/smartbox-client.js:6, for example 'api-hjm'",
-    "reconnectInterval": 600000
+    "apiName": "key of one of /src/smartbox-client.js:6, for example 'api-hjm'"
   },
   "mqtt": {
     "host": "localhost",
@@ -32,6 +31,10 @@ Create a configuration file at `~/.config/smartbox2mqtt/config.json` (Linux) or 
     "username": "mqtt username",
     "password": "mqtt password",
     "baseTopic": "smartbox"
+  },
+  "availability": {
+    "connectDebounceMs": 10000,
+    "socketLossGraceMs": 10000
   }
 }
 ```
@@ -43,7 +46,6 @@ Create a configuration file at `~/.config/smartbox2mqtt/config.json` (Linux) or 
 - `username` (required): Your smartbox account email
 - `password` (required): Your smartbox account password
 - `apiName` (required): API endpoint key (e.g., `api-hjm`). See `/src/smartbox-client.js:6` for available options
-- `reconnectInterval` (optional): Interval in milliseconds for periodic Socket.IO reconnection. Default: 600000 (10 minutes). This ensures the WebSocket connection stays fresh and auth tokens are refreshed. Set to `0` to disable periodic reconnects.
 
 #### mqtt section
 
@@ -52,6 +54,11 @@ Create a configuration file at `~/.config/smartbox2mqtt/config.json` (Linux) or 
 - `username` (optional): MQTT broker username
 - `password` (optional): MQTT broker password
 - `baseTopic` (optional): Base topic prefix for all MQTT messages. Default: `smartbox`
+
+#### availability section (optional)
+
+- `connectDebounceMs` (optional): Hold-down before flipping a heater Online after a stable `/connected: true` from the cloud. Filters out cloud-side flapping. Default: 10000 (10 s). `/connected: false` is always immediate.
+- `socketLossGraceMs` (optional): If the bridge loses its websocket to the Helki cloud and doesn't reconnect within this window, all per-node `online` topics are flipped to Offline. Default: 10000 (10 s).
 
 ## Usage
 
@@ -85,7 +92,7 @@ For each heater (`{nodeName}`), topics are structured as: `{baseTopic}/{nodeName
 - `{baseTopic}/{nodeName}/ice_temperature` - Frost protection temperature (°C)
 - `{baseTopic}/{nodeName}/active` - Actively heating: `ON` or `OFF`
 - `{baseTopic}/{nodeName}/power` - Real-time power consumption in Watts
-- `{baseTopic}/{nodeName}/online` - Connection status: `ON` or `OFF`
+- `{baseTopic}/{nodeName}/online` - Device connection status: `Online` or `Offline` (retained, with per-heater MQTT Last Will)
 
 ### Bridge Topics
 
