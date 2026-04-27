@@ -42,4 +42,30 @@ fi
 echo "   ✓ Done"
 echo ""
 
+# Pull homebridge-technotherm (Node/TS homebridge plugin using the same Helki API)
+echo "3. Pulling homebridge-technotherm..."
+if [ -d "$REFERENCE_DIR/homebridge-technotherm" ]; then
+  echo "   Directory exists, pulling latest changes..."
+  cd "$REFERENCE_DIR/homebridge-technotherm"
+  git pull
+else
+  echo "   Cloning repository..."
+  git clone https://github.com/duggan/homebridge-technotherm.git "$REFERENCE_DIR/homebridge-technotherm"
+fi
+echo "   ✓ Done"
+echo ""
+
+# Pull jandado/smartbox (older Python lib variant)
+echo "4. Pulling jandado-smartbox..."
+if [ -d "$REFERENCE_DIR/jandado-smartbox" ]; then
+  echo "   Directory exists, pulling latest changes..."
+  cd "$REFERENCE_DIR/jandado-smartbox"
+  git pull
+else
+  echo "   Cloning repository..."
+  git clone https://github.com/jandado/smartbox.git "$REFERENCE_DIR/jandado-smartbox"
+fi
+echo "   ✓ Done"
+echo ""
+
 echo "All reference repositories updated successfully!"
