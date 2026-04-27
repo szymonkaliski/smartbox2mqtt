@@ -1,5 +1,6 @@
 import mqtt from "mqtt";
 import { createLogger } from "./logger.js";
+import { loadPending, savePending, clearPending } from "./pending-store.js";
 
 const DEFAULT_CONNECT_DEBOUNCE_MS = 10000;
 
@@ -19,6 +20,14 @@ export class MQTTBridge {
     this.gatewayConnected = null;
     this.lastPublishedOnline = null;
     this.connectDebounceTimer = null;
+    this.draining = false;
+    this.pending = loadPending(deviceId, node);
+    if (Object.keys(this.pending).length > 0) {
+      this.log.info(
+        { pending: this.pending },
+        "Loaded pending commands from disk",
+      );
+    }
   }
 
   sanitizeNodeName(name) {
@@ -46,7 +55,10 @@ export class MQTTBridge {
 
     await new Promise((resolve, reject) => {
       this.client.once("connect", () => {
-        this.log.info({ baseTopic: this.baseTopic }, "Connected to MQTT broker");
+        this.log.info(
+          { baseTopic: this.baseTopic },
+          "Connected to MQTT broker",
+        );
         this.subscribe();
         this.publishState();
         resolve();
@@ -88,6 +100,26 @@ export class MQTTBridge {
     });
   }
 
+  setPendingField(field, value) {
+    this.pending[field] = value;
+    savePending(this.deviceId, this.node, this.pending);
+  }
+
+  clearPendingField(field) {
+    if (!(field in this.pending)) return;
+    delete this.pending[field];
+    if (Object.keys(this.pending).length === 0) {
+      clearPending(this.deviceId, this.node);
+    } else {
+      savePending(this.deviceId, this.node, this.pending);
+    }
+  }
+
+  clearPendingFieldIfEquals(field, value) {
+    if (this.pending[field] !== value) return;
+    this.clearPendingField(field);
+  }
+
   async handleMessage(topic, message) {
     const payload = message.toString();
 
@@ -99,15 +131,27 @@ export class MQTTBridge {
 
     try {
       if (topic === `${this.baseTopic}/mode/set`) {
+        if (this.gatewayConnected !== true) {
+          this.setPendingField("mode", payload);
+          this.client.publish(`${this.baseTopic}/mode`, payload, {
+            retain: true,
+          });
+          this.log.info({ mode: payload }, "Gateway offline, queued mode");
+          return;
+        }
         this.client.publish(`${this.baseTopic}/mode`, payload, {
           retain: true,
         });
         try {
           await this.smartboxClient.setMode(this.deviceId, this.node, payload);
+          this.clearPendingFieldIfEquals("mode", payload);
           this.log.info({ mode: payload }, "Mode set successfully");
         } catch (error) {
-          this.log.error({ err: error }, "Error setting mode, reverting state");
-          await this.publishState();
+          this.setPendingField("mode", payload);
+          this.log.error(
+            { err: error, mode: payload },
+            "Error setting mode, queued for retry",
+          );
         }
       } else if (topic === `${this.baseTopic}/temperature/set`) {
         const temperature = parseFloat(payload);
@@ -117,6 +161,16 @@ export class MQTTBridge {
           return;
         }
 
+        if (this.gatewayConnected !== true) {
+          this.setPendingField("stemp", temperature);
+          this.client.publish(
+            `${this.baseTopic}/temperature`,
+            temperature.toFixed(1),
+            { retain: true },
+          );
+          this.log.info({ temperature }, "Gateway offline, queued temperature");
+          return;
+        }
         this.client.publish(
           `${this.baseTopic}/temperature`,
           temperature.toFixed(1),
@@ -128,17 +182,61 @@ export class MQTTBridge {
             this.node,
             temperature,
           );
+          this.clearPendingFieldIfEquals("stemp", temperature);
           this.log.info({ temperature }, "Temperature set successfully");
         } catch (error) {
+          this.setPendingField("stemp", temperature);
           this.log.error(
-            { err: error },
-            "Error setting temperature, reverting state",
+            { err: error, temperature },
+            "Error setting temperature, queued for retry",
           );
-          await this.publishState();
         }
       }
     } catch (error) {
       this.log.error({ err: error }, "Error handling MQTT message");
+    }
+  }
+
+  async drainPending() {
+    if (this.draining) return;
+    if (Object.keys(this.pending).length === 0) return;
+    this.draining = true;
+    try {
+      this.log.info({ pending: this.pending }, "Draining pending commands");
+
+      if (this.pending.mode !== undefined) {
+        const mode = this.pending.mode;
+        try {
+          await this.smartboxClient.setMode(this.deviceId, this.node, mode);
+          this.clearPendingFieldIfEquals("mode", mode);
+          this.log.info({ mode }, "Drained pending mode");
+        } catch (error) {
+          this.log.error(
+            { err: error, mode },
+            "Failed to drain pending mode; value retained on disk, retried on next offline→online transition",
+          );
+        }
+      }
+
+      if (this.pending.stemp !== undefined) {
+        const stemp = this.pending.stemp;
+        try {
+          await this.smartboxClient.setTemperature(
+            this.deviceId,
+            this.node,
+            stemp,
+          );
+          this.clearPendingFieldIfEquals("stemp", stemp);
+          this.log.info({ stemp }, "Drained pending temperature");
+        } catch (error) {
+          this.log.error(
+            { err: error, stemp },
+            "Failed to drain pending temperature; value retained on disk, retried on next offline→online transition",
+          );
+        }
+      }
+    } finally {
+      this.draining = false;
     }
   }
 
@@ -231,6 +329,11 @@ export class MQTTBridge {
     this.lastPublishedOnline = desired;
     this.client.publish(this.onlineTopic, desired, { retain: true });
     this.log.info({ online: desired }, "Published availability");
+    if (desired === "Online") {
+      this.drainPending().catch((error) => {
+        this.log.error({ err: error }, "Drain pending failed unexpectedly");
+      });
+    }
   }
 
   publishAvailability(connected) {

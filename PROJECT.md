@@ -122,3 +122,16 @@ Bug: the per-node `online` topic flapped with the Helki cloud's `/connected` eve
 - [x] Debounce `/connected: true` transitions (default 10 s, configurable via `availability.connectDebounceMs`) — `/connected: false` is immediate @done(2026-04-27)
 - [x] Dedupe identical retained publishes in `recomputeOnline` @done(2026-04-27)
 - [x] On Helki socket loss beyond grace (default 10 s, `availability.socketLossGraceMs`), publish per-node Offline; on reconnect let `dev_data.connected` re-bootstrap @done(2026-04-27)
+
+## Feature 12: Offline command queue with persistence
+
+When a `mode/set` or `temperature/set` arrives while the heater's gateway is offline, the bridge must remember the intent and apply it once the device comes back. Driven by `friday-ruler` being edge-triggered: a beacon transition fires its setpoint rule once, with no retry — so an offline heater would silently lose the command. The Helki REST is treated as untrustworthy when `gatewayConnected !== true`; we don't attempt the call at all in that window.
+
+Per-heater state lives at `<envPaths.data>/pending/<deviceId>-<nodeType>-<nodeAddr>.json` (e.g. `~/.local/share/smartbox2mqtt/pending/...`). Schema is `{ version: 1, pending: { mode?: string, stemp?: number } }`; load discards invalid shape, unknown version, extra keys, or corrupt JSON. Atomic writes via tmp + rename.
+
+- [x] `src/pending-store.js` with versioned schema, validation, atomic writes @done(2026-04-27)
+- [x] `MQTTBridge` loads `pending` on construction; if non-empty, log it @done(2026-04-27)
+- [x] `handleMessage` queues to `pending` when `gatewayConnected !== true` (offline or pre-first-/connected) and skips the API call; persists immediately @done(2026-04-27)
+- [x] `handleMessage` on API failure while online: keep value in `pending`, no rollback (removed `publishState()` revert) @done(2026-04-27)
+- [x] `recomputeOnline` drains `pending` on transition to Online; clears file on success, retains on failure for next come-online @done(2026-04-27)
+- [x] Last-write-wins per field (`mode`, `stemp`) — multiple sets while offline collapse to the latest @done(2026-04-27)
