@@ -20,7 +20,8 @@ export class MQTTBridge {
     this.gatewayConnected = null;
     this.lastPublishedOnline = null;
     this.connectDebounceTimer = null;
-    this.draining = false;
+    this.drainPromise = null;
+    this.everConnected = false;
     this.pending = loadPending(deviceId, node);
     if (Object.keys(this.pending).length > 0) {
       this.log.info(
@@ -53,16 +54,26 @@ export class MQTTBridge {
 
     this.client = mqtt.connect(mqttUrl, options);
 
+    this.client.on("connect", async () => {
+      this.log.info({ baseTopic: this.baseTopic }, "Connected to MQTT broker");
+      this.subscribe();
+      const reconnect = this.everConnected;
+      this.everConnected = true;
+      if (reconnect) {
+        // Reconnect: a broker restart delivers our Offline will and can drop
+        // retained state. lastPublishedOnline is in-memory, so reset it to force
+        // recomputeOnline to republish the true current availability. Await it:
+        // if the gateway is online with pending intent it drains here, and the
+        // await keeps publishState's authoritative fetch from clobbering the
+        // just-drained setpoint on the retained mode/temperature topics.
+        this.lastPublishedOnline = null;
+        await this.recomputeOnline();
+      }
+      await this.publishState();
+    });
+
     await new Promise((resolve, reject) => {
-      this.client.once("connect", () => {
-        this.log.info(
-          { baseTopic: this.baseTopic },
-          "Connected to MQTT broker",
-        );
-        this.subscribe();
-        this.publishState();
-        resolve();
-      });
+      this.client.once("connect", () => resolve());
 
       this.client.once("error", (error) => {
         this.log.error({ err: error }, "MQTT error");
@@ -197,46 +208,48 @@ export class MQTTBridge {
     }
   }
 
-  async drainPending() {
-    if (this.draining) return;
-    if (Object.keys(this.pending).length === 0) return;
-    this.draining = true;
-    try {
-      this.log.info({ pending: this.pending }, "Draining pending commands");
+  drainPending() {
+    if (this.drainPromise) return this.drainPromise;
+    if (Object.keys(this.pending).length === 0) return Promise.resolve();
+    this.drainPromise = this.runDrain().finally(() => {
+      this.drainPromise = null;
+    });
+    return this.drainPromise;
+  }
 
-      if (this.pending.mode !== undefined) {
-        const mode = this.pending.mode;
-        try {
-          await this.smartboxClient.setMode(this.deviceId, this.node, mode);
-          this.clearPendingFieldIfEquals("mode", mode);
-          this.log.info({ mode }, "Drained pending mode");
-        } catch (error) {
-          this.log.error(
-            { err: error, mode },
-            "Failed to drain pending mode; value retained on disk, retried on next offline→online transition",
-          );
-        }
-      }
+  async runDrain() {
+    this.log.info({ pending: this.pending }, "Draining pending commands");
 
-      if (this.pending.stemp !== undefined) {
-        const stemp = this.pending.stemp;
-        try {
-          await this.smartboxClient.setTemperature(
-            this.deviceId,
-            this.node,
-            stemp,
-          );
-          this.clearPendingFieldIfEquals("stemp", stemp);
-          this.log.info({ stemp }, "Drained pending temperature");
-        } catch (error) {
-          this.log.error(
-            { err: error, stemp },
-            "Failed to drain pending temperature; value retained on disk, retried on next offline→online transition",
-          );
-        }
+    if (this.pending.mode !== undefined) {
+      const mode = this.pending.mode;
+      try {
+        await this.smartboxClient.setMode(this.deviceId, this.node, mode);
+        this.clearPendingFieldIfEquals("mode", mode);
+        this.log.info({ mode }, "Drained pending mode");
+      } catch (error) {
+        this.log.error(
+          { err: error, mode },
+          "Failed to drain pending mode; value retained on disk, retried on next offline→online transition",
+        );
       }
-    } finally {
-      this.draining = false;
+    }
+
+    if (this.pending.stemp !== undefined) {
+      const stemp = this.pending.stemp;
+      try {
+        await this.smartboxClient.setTemperature(
+          this.deviceId,
+          this.node,
+          stemp,
+        );
+        this.clearPendingFieldIfEquals("stemp", stemp);
+        this.log.info({ stemp }, "Drained pending temperature");
+      } catch (error) {
+        this.log.error(
+          { err: error, stemp },
+          "Failed to drain pending temperature; value retained on disk, retried on next offline→online transition",
+        );
+      }
     }
   }
 
@@ -323,14 +336,14 @@ export class MQTTBridge {
     );
   }
 
-  recomputeOnline() {
+  async recomputeOnline() {
     const desired = this.gatewayConnected === true ? "Online" : "Offline";
     if (desired === this.lastPublishedOnline) return;
     this.lastPublishedOnline = desired;
     this.client.publish(this.onlineTopic, desired, { retain: true });
     this.log.info({ online: desired }, "Published availability");
     if (desired === "Online") {
-      this.drainPending().catch((error) => {
+      await this.drainPending().catch((error) => {
         this.log.error({ err: error }, "Drain pending failed unexpectedly");
       });
     }

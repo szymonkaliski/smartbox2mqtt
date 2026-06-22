@@ -135,3 +135,16 @@ Per-heater state lives at `<envPaths.data>/pending/<deviceId>-<nodeType>-<nodeAd
 - [x] `handleMessage` on API failure while online: keep value in `pending`, no rollback (removed `publishState()` revert) @done(2026-04-27)
 - [x] `recomputeOnline` drains `pending` on transition to Online; clears file on success, retains on failure for next come-online @done(2026-04-27)
 - [x] Last-write-wins per field (`mode`, `stemp`) — multiple sets while offline collapse to the latest @done(2026-04-27)
+
+## Feature 13: Re-assert availability on MQTT reconnect
+
+Bug: both heaters showed "No Response" in Homebridge while state kept flowing. Verified empirically — the MQTT broker (mosquitto) restarted (process start `16:29:43`, bridge logged `ECONNREFUSED 127.0.0.1:1883` at `16:29:44`); the bridge process survived and its mqtt.js clients auto-reconnected. The broker held retained `Offline` on `friday/hjm/heater_*/online` and `friday/hjm/lwt` (the will payloads), while every state topic (`mode`, `temperature`, `current_temperature`, `power`) was fresh — proving the bridge was alive but availability was stuck Offline.
+
+Root cause: both availability re-publishes were bound to first-connect-only paths. Bridge LWT `Online` lived inside `.once("connect")`. Per-node `online` is only published by `recomputeOnline()` via `publishAvailability()` on a gateway-connection _transition_; since the Helki socket never dropped, `gatewayConnected` stayed `true`, `publishAvailability(true)` early-returned, and `recomputeOnline`'s in-memory `lastPublishedOnline` dedup would have skipped anyway. Nothing re-asserted availability on an MQTT reconnect, so a broker restart left it Offline indefinitely.
+
+- [x] `index.js`: publish bridge LWT `Online` from `.on("connect")` (every reconnect); keep `.once("connect")` only to resolve the init promise @done(2026-06-22)
+- [x] `mqtt-bridge.js`: add `everConnected` flag; on reconnect reset `lastPublishedOnline = null` and call `recomputeOnline()` to republish true availability; first connect unchanged (still waits for `/connected` truth) @done(2026-06-22)
+- [x] `mqtt-bridge.js`: re-run `subscribe()` + `publishState()` on every connect to restore retained state the broker may have dropped @done(2026-06-22)
+- [x] `mqtt-bridge.js`: on reconnect, `await recomputeOnline()` before `publishState()` so a drain triggered by the offline→online transition completes first — otherwise the authoritative `getNodeStatus` fetch could clobber the just-drained setpoint on the retained `mode`/`temperature` topics @done(2026-06-22)
+- [x] `mqtt-bridge.js`: `recomputeOnline()` returns the drain promise (only on the Online transition) so the reconnect path can await it; never drains against an offline gateway @done(2026-06-22)
+- [x] `mqtt-bridge.js`: `drainPending()` returns a shared in-flight promise (replaces the `draining` boolean) so a concurrent caller awaits the same drain instead of getting `undefined` and falling through @done(2026-06-22)

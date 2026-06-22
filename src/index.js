@@ -52,10 +52,13 @@ async function main() {
 
     bridgeLwtClient = mqtt.connect(mqttUrl, bridgeLwtOptions);
 
+    bridgeLwtClient.on("connect", () => {
+      bridgeLwtClient.publish(statusTopic, "Online", { retain: true });
+    });
+
     await new Promise((resolve, reject) => {
       bridgeLwtClient.once("connect", () => {
         log.info("Connected to MQTT broker (bridge LWT)");
-        bridgeLwtClient.publish(statusTopic, "Online", { retain: true });
         resolve();
       });
 
