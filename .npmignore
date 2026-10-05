@@ -1,6 +1,6 @@
 reference/
 PROJECT.md
-CLAUDE.md
+AGENTS.md
 .claude/
 .gitignore
 .prettierignore
