@@ -4,7 +4,7 @@ MQTT bridge for smartbox electric heaters.
 
 ## Overview
 
-`smartbox2mqtt` is a standalone Node.js adapter that bridges MQTT and smartbox electric heaters. It provides a simple MQTT interface for monitoring and controlling heater modes, target temperatures, and real-time power consumption.
+`smartbox2mqtt` is a standalone Node.js adapter that bridges MQTT and smartbox electric heaters. It provides a simple MQTT interface for monitoring and controlling heater modes, target temperatures, and energy consumption.
 
 This project is based on the [hass-smartbox](https://github.com/ajtudela/hass-smartbox/) Home Assistant integration and the [smartbox](https://github.com/ajtudela/smartbox/) Python library. Adapted to Node and MQTT by Claude.
 
@@ -91,7 +91,8 @@ For each heater (`{nodeName}`), topics are structured as: `{baseTopic}/{nodeName
 - `{baseTopic}/{nodeName}/eco_temperature` - Eco mode temperature (°C)
 - `{baseTopic}/{nodeName}/ice_temperature` - Frost protection temperature (°C)
 - `{baseTopic}/{nodeName}/active` - Actively heating: `ON` or `OFF`
-- `{baseTopic}/{nodeName}/power` - Real-time power consumption in Watts
+- `{baseTopic}/{nodeName}/power` - Nominal power rating in Watts
+- `{baseTopic}/{nodeName}/energy` - Cumulative energy consumption in kWh (polled from `/samples`)
 - `{baseTopic}/{nodeName}/online` - Device connection status: `Online` or `Offline` (retained, with per-heater MQTT Last Will)
 
 ### Bridge Topics
@@ -118,8 +119,8 @@ mosquitto_pub -t "smartbox/living-room/temperature/set" -m "21.0"
 mosquitto_sub -t "smartbox/living-room/current_temperature"
 ```
 
-### Monitor power consumption
+### Monitor energy consumption
 
 ```bash
-mosquitto_sub -t "smartbox/living-room/power"
+mosquitto_sub -t "smartbox/living-room/energy"
 ```

@@ -29,6 +29,7 @@ export class SmartboxClient {
     this.accessToken = "";
     this.refreshToken = "";
     this.expiresAt = null;
+    this.authPromise = null;
 
     const reseller = RESELLERS[apiName] || RESELLERS["api"];
     this.basicAuth = reseller.basicAuth;
@@ -67,17 +68,19 @@ export class SmartboxClient {
     }
   }
 
-  async checkRefreshAuth() {
+  checkRefreshAuth() {
+    if (this.authPromise) return this.authPromise;
     if (
       !this.accessToken ||
       (this.expiresAt && this.expiresAt - new Date() < 60000)
     ) {
-      if (!this.accessToken) {
-        await this.authenticate();
-      } else {
-        await this.refreshAuth();
-      }
+      const run = !this.accessToken ? this.authenticate() : this.refreshAuth();
+      this.authPromise = run.finally(() => {
+        this.authPromise = null;
+      });
+      return this.authPromise;
     }
+    return Promise.resolve();
   }
 
   async refreshAuth() {
@@ -177,6 +180,13 @@ export class SmartboxClient {
     return await this.apiRequest(
       `devs/${deviceId}/${node.type}/${node.addr}/status`,
     );
+  }
+
+  async getNodeSamples(deviceId, node, startTime, endTime) {
+    const response = await this.apiRequest(
+      `devs/${deviceId}/${node.type}/${node.addr}/samples?start=${startTime}&end=${endTime}`,
+    );
+    return response.samples || [];
   }
 
   async setNodeStatus(deviceId, node, statusData) {

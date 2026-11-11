@@ -3,6 +3,7 @@ import { createLogger } from "./logger.js";
 import { loadPending, savePending, clearPending } from "./pending-store.js";
 
 const DEFAULT_CONNECT_DEBOUNCE_MS = 10000;
+const ENERGY_POLL_INTERVAL_MS = 30 * 60 * 1000;
 
 export class MQTTBridge {
   constructor(config, smartboxClient, deviceId, node) {
@@ -20,8 +21,10 @@ export class MQTTBridge {
     this.gatewayConnected = null;
     this.lastPublishedOnline = null;
     this.connectDebounceTimer = null;
+    this.energyPollTimer = null;
     this.drainPromise = null;
     this.everConnected = false;
+    this.shuttingDown = false;
     this.pending = loadPending(deviceId, node);
     if (Object.keys(this.pending).length > 0) {
       this.log.info(
@@ -55,6 +58,7 @@ export class MQTTBridge {
     this.client = mqtt.connect(mqttUrl, options);
 
     this.client.on("connect", async () => {
+      if (this.shuttingDown) return;
       this.log.info({ baseTopic: this.baseTopic }, "Connected to MQTT broker");
       this.subscribe();
       const reconnect = this.everConnected;
@@ -70,6 +74,7 @@ export class MQTTBridge {
         await this.recomputeOnline();
       }
       await this.publishState();
+      await this.publishEnergy();
     });
 
     await new Promise((resolve, reject) => {
@@ -80,6 +85,12 @@ export class MQTTBridge {
         reject(error);
       });
     });
+
+    if (!this.shuttingDown) {
+      this.energyPollTimer = setInterval(() => {
+        this.publishEnergy();
+      }, ENERGY_POLL_INTERVAL_MS);
+    }
 
     this.client.on("message", async (topic, message) => {
       await this.handleMessage(topic, message);
@@ -266,12 +277,47 @@ export class MQTTBridge {
     }
   }
 
+  async publishEnergy() {
+    if (this.shuttingDown || !this.client?.connected) return;
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const samples = await this.smartboxClient.getNodeSamples(
+        this.deviceId,
+        this.node,
+        now - 3 * 3600,
+        now,
+      );
+      if (this.shuttingDown || !this.client?.connected) return;
+      if (samples.length === 0) return;
+      const last = samples[samples.length - 1];
+      if (typeof last.counter !== "number") return;
+      const energyKwh = (last.counter / 1000).toFixed(3);
+      this.client.publish(`${this.baseTopic}/energy`, energyKwh, {
+        retain: true,
+      });
+      this.log.info({ energyKwh, sampleTime: last.t }, "Published energy");
+    } catch (error) {
+      this.log.error({ err: error }, "Error publishing energy");
+    }
+  }
+
   publishStatus(status) {
-    this.client.publish(`${this.baseTopic}/mode`, status.mode || "unknown", {
+    if (this.shuttingDown || !this.client) return;
+    const usePending = this.gatewayConnected !== true;
+    const mode =
+      usePending && this.pending.mode !== undefined
+        ? this.pending.mode
+        : status.mode || "unknown";
+    const stemp =
+      usePending && this.pending.stemp !== undefined
+        ? this.pending.stemp.toFixed(1)
+        : status.stemp || "0";
+
+    this.client.publish(`${this.baseTopic}/mode`, mode, {
       retain: true,
     });
 
-    this.client.publish(`${this.baseTopic}/temperature`, status.stemp || "0", {
+    this.client.publish(`${this.baseTopic}/temperature`, stemp, {
       retain: true,
     });
 
@@ -326,8 +372,8 @@ export class MQTTBridge {
 
     this.log.info(
       {
-        mode: status.mode,
-        stemp: status.stemp,
+        mode,
+        stemp,
         mtemp: status.mtemp,
         active: activeStatus,
         power: status.power,
@@ -382,11 +428,21 @@ export class MQTTBridge {
   }
 
   async shutdown() {
+    this.shuttingDown = true;
     if (this.connectDebounceTimer) {
       clearTimeout(this.connectDebounceTimer);
       this.connectDebounceTimer = null;
     }
+    if (this.energyPollTimer) {
+      clearInterval(this.energyPollTimer);
+      this.energyPollTimer = null;
+    }
     if (!this.client) return;
+    if (!this.client.connected) {
+      return new Promise((resolve) => {
+        this.client.end(true, {}, resolve);
+      });
+    }
     return new Promise((resolve) => {
       this.client.publish(
         this.onlineTopic,

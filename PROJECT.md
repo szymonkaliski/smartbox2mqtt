@@ -135,6 +135,7 @@ Per-heater state lives at `<envPaths.data>/pending/<deviceId>-<nodeType>-<nodeAd
 - [x] `handleMessage` on API failure while online: keep value in `pending`, no rollback (removed `publishState()` revert) @done(2026-04-27)
 - [x] `recomputeOnline` drains `pending` on transition to Online; clears file on success, retains on failure for next come-online @done(2026-04-27)
 - [x] Last-write-wins per field (`mode`, `stemp`) — multiple sets while offline collapse to the latest @done(2026-04-27)
+- [x] `publishStatus` preserves queued `pending` `mode` and `stemp` on retained MQTT topics while `gatewayConnected !== true` @done(2026-11-11)
 
 ## Feature 13: Re-assert availability on MQTT reconnect
 
@@ -148,3 +149,11 @@ Root cause: both availability re-publishes were bound to first-connect-only path
 - [x] `mqtt-bridge.js`: on reconnect, `await recomputeOnline()` before `publishState()` so a drain triggered by the offline→online transition completes first — otherwise the authoritative `getNodeStatus` fetch could clobber the just-drained setpoint on the retained `mode`/`temperature` topics @done(2026-06-22)
 - [x] `mqtt-bridge.js`: `recomputeOnline()` returns the drain promise (only on the Online transition) so the reconnect path can await it; never drains against an offline gateway @done(2026-06-22)
 - [x] `mqtt-bridge.js`: `drainPending()` returns a shared in-flight promise (replaces the `draining` boolean) so a concurrent caller awaits the same drain instead of getting `undefined` and falling through @done(2026-06-22)
+
+## Feature 14: Cumulative Energy Counter
+
+`/api/v2/devs/{devId}/{nodeType}/{nodeAddr}/samples` provides the hardware's cumulative hourly energy counter in Wh.
+
+- [x] `smartbox-client.js`: add `getNodeSamples(deviceId, node, startTime, endTime)` @done(2026-10-20)
+- [x] `mqtt-bridge.js`: poll `getNodeSamples` on connect and every 30 min, publishing `{baseTopic}/{nodeName}/energy` in kWh (retained) @done(2026-10-20)
+- [x] `smartbox-client.js`: deduplicate concurrent token refreshes in `checkRefreshAuth()` with a shared in-flight promise @done(2026-11-11)

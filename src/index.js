@@ -158,14 +158,14 @@ async function main() {
 
     process.on("SIGINT", async () => {
       log.info("Shutting down");
+      const forceExit = setTimeout(() => {
+        log.warn("Shutdown publish timed out, exiting");
+        process.exit(0);
+      }, 2000);
       bridges.forEach((bridge) => bridge.unsubscribe());
       socketBridges.forEach((sb) => sb.disconnect());
       await Promise.all(bridges.map((bridge) => bridge.shutdown()));
-      if (bridgeLwtClient) {
-        const forceExit = setTimeout(() => {
-          log.warn("Shutdown publish timed out, exiting");
-          process.exit(0);
-        }, 2000);
+      if (bridgeLwtClient && bridgeLwtClient.connected) {
         bridgeLwtClient.publish(
           statusTopic,
           "Offline",
@@ -177,6 +177,10 @@ async function main() {
           },
         );
       } else {
+        clearTimeout(forceExit);
+        if (bridgeLwtClient) {
+          bridgeLwtClient.end(true);
+        }
         process.exit(0);
       }
     });
